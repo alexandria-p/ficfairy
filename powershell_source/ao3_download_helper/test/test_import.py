@@ -627,6 +627,21 @@ def test_a_run_ends_by_listing_the_repairs_a_name_clash_stopped(capsys):
     assert sent['repairClashes'] == ao3.repair_clashes
 
 
+@pytest.mark.parametrize('replace', [False, True])
+def test_a_work_only_renamed_and_also_updated_is_fetched_only_in_the_formats_it_lacks(
+        library, monkeypatch, replace):
+    # Repair from AO3 as *only rename*, and the same work updated for its date issue: the file
+    # is named with AO3's date first, so the update sees it as current and fetches only what
+    # the work has no file of - the renamed file is never downloaded again
+    a_copy(library, '1 Fic 1 - Someone.html')
+
+    _, fetched = importing(library, monkeypatch, ['JSON', 'EPUB'], replace=replace,
+                           repair=['1 Fic 1 - Someone.html'], repairRenameOnly=True)
+
+    assert fetched['1'] == ['EPUB']
+    assert '1 Fic 1 - Someone 2026-05-01.html' in works_files(library)
+
+
 def test_only_renaming_is_a_repairs_alone():
     _, [job], _ = start_request(server.ACTION_IMPORT, '1', repairRenameOnly=True)
     assert job.options['repairRenameOnly'] is False
