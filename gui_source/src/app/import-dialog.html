@@ -653,17 +653,19 @@
           you chose to repair be repaired?</strong>
         </p>
         <fieldset class="repair-fallback repair-index">
-          <legend>First, your FicFairy index</legend>
+          <legend>If an index exists for the work</legend>
           <label class="check">
             <input type="checkbox" name="indexFirst" [checked]="indexFirst()"
                    (change)="indexFirst.set($any($event.target).checked)" />
             <span>
-              First try the last updated date in your FicFairy index
+              Try to date the file from an existing FicFairy index?
               <span class="hint">
-                Where your index already has a last updated date for the work, the file keeps what it
-                holds and is renamed to include that date - AO3 isn't asked. That date may not be the
-                version your file actually holds. Files whose work has no date in your index go to
-                AO3, then FicHub, as chosen below.
+                Your file keeps what it holds, and is renamed to include the last known updated date
+                that FicFairy retrieved from AO3. That date may not be the version your file actually
+                holds.
+              </span>
+              <span class="hint">
+                If there is no index, then it attempts to connect to AO3, and then FicHub instead.
               </span>
               <span class="hint index-first-count">
                 {{ indexDateCount() | number }} of the {{ repairs | number }}

@@ -1262,7 +1262,8 @@ describe('ImportDialog', () => {
 
       expect(indexFirst().checked).toBe(false);
       const said = indexFirst().closest('label')!.textContent!.replace(/\s+/g, ' ');
-      expect(said).toContain('First try the last updated date in your FicFairy index');
+      expect(said).toContain('Try to date the file from an existing FicFairy index?');
+      expect(said).toContain('If there is no index, then it attempts to connect to AO3, and then FicHub instead.');
       expect(said).toContain('1 of the 1 file has a date in your index.');
     });
 
