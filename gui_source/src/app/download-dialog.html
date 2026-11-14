@@ -2142,6 +2142,32 @@
         }
 
         <!--
+          files Resolve issues asked to repair from AO3 or FicHub that were not: the name each
+          would be given is already another file's, so both were kept
+        -->
+        @if (repairClashes().length) {
+          <details class="failures repair-clashes" [open]="repairClashes().length <= 5">
+            <summary class="failures-text">
+              <strong>{{ repairClashes().length | number }}</strong>
+              {{ repairClashes().length === 1 ? 'file' : 'files' }} failed to repair from AO3/FicHub
+              due to a <strong>name clash</strong>.
+            </summary>
+            <p class="hint">
+              The name each would be given is already taken by another file, so both were kept as
+              they are. Resolve issues offers the pair as duplicates to sort out.
+            </p>
+            <ul class="failed-list">
+              @for (item of repairClashes(); track $index) {
+                <li>
+                  <a [href]="item.link" [appWorkLink]="item.id" target="_blank" rel="noopener">{{ item.id }}</a>
+                  <span class="reason">{{ repairClashWords(item) }}</span>
+                </li>
+              }
+            </ul>
+          </details>
+        }
+
+        <!--
           files with no date written the app's way were asked about, one at a time: dating them
           in Resolve issues means the next run judges them by their date instead of asking
         -->

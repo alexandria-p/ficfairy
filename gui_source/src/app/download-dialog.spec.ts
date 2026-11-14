@@ -1657,6 +1657,20 @@ describe('DownloadDialog', () => {
     expect(element.querySelector('.question')).toBeNull();
   });
 
+  it('lists at the end the files a name clash kept from being repaired', async () => {
+    await open('bookmarks');
+    await advanceTo('running');
+    jobs.push!({ type: 'repairClashes', repairClashes: [
+      { id: '1', link: 'https://archiveofourown.org/works/1', format: 'EPUB', site: 'AO3',
+        file: '1 Fic.epub', wanted: '1 Fic - Someone 2026-05-01.epub' }] } as JobEvent);
+    jobs.push!({ type: 'finished' } as JobEvent);
+    await fixture.whenStable();
+
+    const said = element.querySelector('.repair-clashes')?.textContent?.replace(/\s+/g, ' ') ?? '';
+    expect(said).toContain('1 file failed to repair from AO3/FicHub due to a name clash');
+    expect(said).toContain('EPUB: failed to repair from AO3 due to a name clash - 1 Fic - Someone 2026-05-01.epub is already another file');
+  });
+
   it('asks about a file whose date is only guessed, saying what it thinks and recommends', async () => {
     await open('bookmarks');
     await advanceTo('running');

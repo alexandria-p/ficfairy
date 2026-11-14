@@ -34,6 +34,7 @@ import {
   Scenario,
   RescuedWork,
   FicHubOlder,
+  RepairClash,
   RunInProgressError,
   StartRequest,
   WorkFailure,
@@ -72,7 +73,7 @@ import { LibraryFreshness } from './freshness';
 import { safeGet, safeRemove, safeSet } from './storage';
 import { Library } from './library';
 import { DropboxLibraryStore, LibraryStore, StorageRequest } from './library-store';
-import { RunIssues, attemptIssues, fichubOlderWords, issueCount, issuesReport } from './issues';
+import { RunIssues, attemptIssues, fichubOlderWords, issueCount, issuesReport, repairClashWords } from './issues';
 import { ImportRequest, LONG_IMPORT_REQUESTS, importRequests } from './imports';
 import { REMEMBER_USERNAME_KEY, SAVED_USERNAME_KEY, SYNC_ACK_KEY, ao3TimeZone, inAo3Zone, utcToZonedDay, zonedDayToUtc, savedAnswerDefaults, savedQuestionTimeout, startingFiletypes, savedAlwaysAnswers, saveAlwaysAnswer, savedGuessedDateTimeout, savedOwnWaits, savedNobodyHere, writtenDate } from './preferences';
 
@@ -562,6 +563,8 @@ export class DownloadDialog implements OnDestroy {
   protected readonly rescued = signal<RescuedWork[]>([]);
   /** formats taken from FicHub that may be older cached copies (`fichubOlder`) */
   protected readonly fichubOlder = signal<FicHubOlder[]>([]);
+  /** Resolve issues' repairs not done: the name each would get is taken (`repairClashes`) */
+  protected readonly repairClashes = signal<RepairClash[]>([]);
 
   /**
    * How many undated files the run has stopped to ask about, or 0 when it is not asking.
@@ -2085,6 +2088,7 @@ export class DownloadDialog implements OnDestroy {
     this.skipped.set([]);
     this.keptCopies.set([]);
     this.fichubOlder.set([]);
+    this.repairClashes.set([]);
     this.unsureFiles.set(0);
     this.duplicateCopies.set(null);
     this.notRemoved.set([]);
@@ -2291,6 +2295,9 @@ export class DownloadDialog implements OnDestroy {
         break;
       case 'rescued':
         this.rescued.set(event.rescued ?? []);
+        break;
+      case 'repairClashes':
+        this.repairClashes.set(event.repairClashes ?? []);
         break;
       case 'fichubOlder':
         this.fichubOlder.set(event.fichubOlder ?? []);
@@ -2624,6 +2631,7 @@ export class DownloadDialog implements OnDestroy {
     notRemoved: this.notRemoved(),
     skipped: this.skipped(),
     fichubOlder: this.fichubOlder(),
+    repairClashes: this.repairClashes(),
   }));
 
   /** how many entries there are across every list of issues this run reported */
@@ -2634,6 +2642,8 @@ export class DownloadDialog implements OnDestroy {
    * too so the account on screen and the file can be checked against each other.
    */
   /** one older FicHub copy, in words */
+  protected readonly repairClashWords = repairClashWords;
+
   protected fichubOlderWords(item: FicHubOlder): string {
     return fichubOlderWords(item);
   }

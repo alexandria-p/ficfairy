@@ -229,6 +229,7 @@ export function runSummary(record: Record<string, unknown>): string[] {
     [issues.notRemoved.length, 'older copies not removed'],
     [issues.skipped.length, 'bookmarks that are not works'],
     [issues.fichubOlder?.length ?? 0, 'from an older FicHub copy'],
+    [issues.repairClashes?.length ?? 0, 'not repaired: name clash'],
   ];
   const said = kinds.filter(([n]) => n).map(([n, what]) => `${n} ${what}`);
   lines.push(`Issues: ${said.length ? said.join('; ') : 'none'}`);

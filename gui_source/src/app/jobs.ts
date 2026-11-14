@@ -374,6 +374,8 @@ export interface RunHistory {
   rescued?: RescuedWork[];
   /** formats taken from FicHub that may be older cached copies - absent on older runs */
   fichubOlder?: FicHubOlder[];
+  /** Resolve issues' repairs a name clash stopped - absent on older runs */
+  repairClashes?: RepairClash[];
   /** older copies marked for removal, and what became of each - absent on older runs */
   removals?: RunRemoval[];
   error: string;
@@ -455,6 +457,21 @@ export interface RescuedWork {
 
 /** a format taken from FicHub, there being no file of it, though FicHub's copy is dated
  *  before the last known update date for the work - kept, but maybe an older cached copy */
+/** a file Resolve issues asked to repair from AO3 or FicHub, not repaired because the name it
+ *  would be given is already another file's - both were kept as they are */
+export interface RepairClash {
+  id: string;
+  link: string;
+  /** e.g. 'EPUB' */
+  format: string;
+  /** the file as it is named, and kept */
+  file: string;
+  /** the name it would have been given, already taken */
+  wanted: string;
+  /** 'AO3' or 'FicHub' */
+  site: string;
+}
+
 export interface FicHubOlder {
   id: string;
   link: string;
@@ -534,6 +551,8 @@ export interface JobEvent {
   rescued?: RescuedWork[];
   /** on a `fichubOlder` event: formats taken from FicHub that may be older cached copies */
   fichubOlder?: FicHubOlder[];
+  /** on a `repairClashes` event: Resolve issues' repairs a name clash stopped */
+  repairClashes?: RepairClash[];
   /** on a `question` event: the work numbers it is about, where it names them */
   ids?: string[];
   /** on a `steps` event: the checklist this run intends to work through */

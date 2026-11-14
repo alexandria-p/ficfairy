@@ -849,7 +849,27 @@ def test_naming_a_file_with_fichubs_date_never_renames_over_another(library, mon
     assert fetched == []
     assert len(work_files(library)) == 2
     assert '75354806 Wolfbird - OpalApparition 2026-04-27.epub' in work_files(library)
-    assert 'is already there' in capsys.readouterr().out
+    assert 'is already taken by another file' in capsys.readouterr().out
+    assert [(x['file'], x['site']) for x in ao3.repair_clashes] == [
+        ('75354806 Wolfbird.epub', strings.SOURCE_FICHUB)]
+
+
+@pytest.mark.fichub
+def test_a_repair_from_fichub_that_would_land_on_another_files_name_is_not_done(
+        library, monkeypatch, capsys):
+    a_copy(library, '75354806 Wolfbird - OpalApparition 2026-04-27.epub')
+    a_copy(library, '75354806 Wolfbird (1 May 2025).epub')
+    fetched = fichub_serving(monkeypatch)
+    job, ao3 = an_import(library, ['JSON'], repair=['75354806 Wolfbird (1 May 2025).epub'],
+                         repairFicHub=True)
+
+    server.rescue_with_fichub(job, library, ao3, MagicMock())
+
+    assert fetched == []
+    assert len(work_files(library)) == 2
+    assert 'is already taken by another file' in capsys.readouterr().out
+    assert [(x['file'], x['site']) for x in ao3.repair_clashes] == [
+        ('75354806 Wolfbird (1 May 2025).epub', strings.SOURCE_FICHUB)]
 
 
 @pytest.mark.fichub

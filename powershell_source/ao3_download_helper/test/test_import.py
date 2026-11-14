@@ -581,11 +581,46 @@ def test_only_renaming_never_renames_over_another_file(library, monkeypatch, cap
     a_copy(library, '1 Fic 1 - Someone.html')
     a_copy(library, '1 Fic 1 - Someone 2026-05-01.html')
 
-    importing(library, monkeypatch, ['JSON'], repair=['1 Fic 1 - Someone.html'],
-              repairRenameOnly=True)
+    job, _ = importing(library, monkeypatch, ['JSON'], repair=['1 Fic 1 - Someone.html'],
+                       repairRenameOnly=True)
 
     assert works_files(library) == ['1 Fic 1 - Someone 2026-05-01.html', '1 Fic 1 - Someone.html']
-    assert 'is already there' in capsys.readouterr().out
+    assert 'is already taken by another file' in capsys.readouterr().out
+    assert job.ao3.repair_clashes == [{
+        'id': '1', 'link': link(1), 'format': 'HTML', 'file': '1 Fic 1 - Someone.html',
+        'wanted': '1 Fic 1 - Someone 2026-05-01.html', 'site': strings.SOURCE_AO3}]
+
+
+def test_a_repair_from_ao3_that_would_land_on_another_files_name_is_not_done(
+        library, monkeypatch, capsys):
+    a_copy(library, '1 Fic 1 - Someone.html')
+    a_copy(library, '1 Fic 1 - Someone 2026-05-01.html')
+    replacing: dict = {}
+
+    job, fetched = importing(library, monkeypatch, ['JSON'], repair=['1 Fic 1 - Someone.html'],
+                             replacing=replacing)
+
+    # nothing fetched for it, nothing replaced: both files stay as they are
+    assert not fetched.get('1')
+    assert not (replacing.get('1') or {}).get('HTML')
+    assert works_files(library) == ['1 Fic 1 - Someone 2026-05-01.html', '1 Fic 1 - Someone.html']
+    assert 'is already taken by another file' in capsys.readouterr().out
+    assert [x['file'] for x in job.ao3.repair_clashes] == ['1 Fic 1 - Someone.html']
+    assert job.ao3.repair_clashes[0]['site'] == strings.SOURCE_AO3
+
+
+def test_a_run_ends_by_listing_the_repairs_a_name_clash_stopped(capsys):
+    ao3 = MagicMock()
+    ao3.failures, ao3.skipped_works, ao3.kept_copies, ao3.fichub_older = [], [], [], []
+    ao3.repair_clashes = [{'id': '1', 'link': link(1), 'format': 'HTML', 'file': 'a.html',
+                           'wanted': 'b.html', 'site': strings.SOURCE_FICHUB}]
+    report = MagicMock()
+
+    server.report_failures(ao3, report)
+
+    assert strings.AO3_INFO_REPAIR_CLASHES.format(1) in capsys.readouterr().out
+    [sent] = [c.args[0] for c in report.call_args_list if c.args[0]['type'] == 'repairClashes']
+    assert sent['repairClashes'] == ao3.repair_clashes
 
 
 def test_only_renaming_is_a_repairs_alone():

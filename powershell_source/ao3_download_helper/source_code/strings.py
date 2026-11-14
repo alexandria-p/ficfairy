@@ -575,7 +575,11 @@ AO3_INFO_REPAIR_FICHUB_NO_GUESS_TAKE = "  repairing the {} of work {} from FicHu
 AO3_INFO_REPAIR_FICHUB_NO_GUESS_KEEP = "  not repairing the {} of work {} from FicHub: no date can be guessed from your file's name to compare its copy with - keeping {}"
 AO3_INFO_REPAIR_FICHUB_UNDATED = "  not repairing the {} of work {} from FicHub: FicHub gives no date for its copy - keeping {}"
 AO3_INFO_REPAIR_RENAMED = "  naming the {} of work {} with {}'s date ({}), as you chose - its contents kept: {} -> {}"
-AO3_INFO_REPAIR_RENAME_TAKEN = "  could not name the {} of work {} with {}'s date: {} is already there, or the rename was refused - keeping {} as it is"
+AO3_INFO_REPAIR_RENAME_TAKEN = "  could not name the {} of work {} with {}'s date as {}: the rename was refused - keeping {} as it is"
+# Resolve issues' repairs that would land on a name another file already has: never done, and
+# listed at the end of the run (`Ao3.repair_clashes`, the `repairClashes` event)
+AO3_INFO_REPAIR_CLASH = "  not repairing the {} of work {} from {}: {} is already taken by another file - keeping {} as it is"
+AO3_INFO_REPAIR_CLASHES = '{} files could not be repaired: the name each would be given is already taken by another file, so both were kept as they are'
 AO3_INFO_REPAIR_RENAME_UNDATED = "  not naming the {} of work {}: {} gives no date for the work - keeping {} as it is"
 AO3_INFO_REPAIR_RENAME_OLDER = "  not naming the {} of work {} with FicHub's date: FicHub's copy is dated {}, older than the date guessed from your file's name ({}) - keeping {} as it is"
 AO3_INFO_REPAIR_FICHUB_ANY = "  repairing the {} of work {} from FicHub, as you chose for every file (FicHub's copy is dated {}; it may be an older cached copy) - replacing {}"

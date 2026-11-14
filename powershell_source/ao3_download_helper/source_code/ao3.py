@@ -256,6 +256,9 @@ class Ao3:
         # for the work: {id, link, title, formats, fichub, latest, latestFrom}. taken anyway (an
         # older version beats none), and warned about, since it may be an older cached copy
         self.fichub_older: list[dict] = []
+        # Resolve issues' repairs not done: the name the file would get is another file's
+        # ({id, link, file, wanted, site}) - reported at the end (`report_failures`)
+        self.repair_clashes: list[dict] = []
         # new copies that arrived while the older copy they replace could not be removed.
         # nothing is lost, but there are now two copies, so the run names each one
         self.kept_copies: list[dict] = []

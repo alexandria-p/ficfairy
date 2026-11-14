@@ -2791,7 +2791,11 @@ def download_planned(job: Job, fileops: FileOps, ao3: Ao3, records: list[dict],
         keep_existing_copies(records, plan, downloadtypes)
         ao3.keep_message = strings.AO3_INFO_KEEPING_YOURS
     # after keeping: a file chosen to repair is replaced whatever an import keeps
-    if repair: repair_copies(records, plan, downloadtypes, repair, repair_only)
+    if repair:
+        repair_copies(records, plan, downloadtypes, repair, repair_only, fileops,
+                      fileops.get_ini_value_integer(strings.INI_NAME_LENGTH,
+                                                    strings.INI_DEFAULT_NAME_LENGTH),
+                      ao3.repair_clashes)
     # an out-of-date copy is not 'already downloaded', so it must not be skipped
     visited = shared.already_downloaded(plan['existing'], downloadtypes, records, plan['stale'])
     if ao3.held_only:
@@ -3128,7 +3132,8 @@ def targets_named(job: 'Job', work: str) -> dict[str, str]:
     return repair_targets(job).get(work) or {}
 
 
-def rename_from_ao3(fileops: FileOps, records: list[dict], repair: dict[str, dict[str, str]]) -> None:
+def rename_from_ao3(fileops: FileOps, records: list[dict], repair: dict[str, dict[str, str]],
+                    clashes: list | None = None) -> None:
     """Each indexed work's files to repair, named with the date AO3 gave its entry - the
     import's *Only rename the file* where AO3 has the work (`rename_with_date`)."""
 
@@ -3143,7 +3148,7 @@ def rename_from_ao3(fileops: FileOps, records: list[dict], repair: dict[str, dic
         work = str(record.get('id') or '')
         if work in repair:
             rename_with_date(fileops, work, existing, record, list(repair[work]), maximum,
-                             strings.SOURCE_AO3)
+                             strings.SOURCE_AO3, clashes=clashes)
 
 
 def repair_targets(job: 'Job') -> dict[str, dict[str, str]]:
@@ -3172,7 +3177,8 @@ def undated_copy(copy: dict | None) -> dict | None:
 
 
 def repair_copies(records: list[dict], plan: dict, filetypes: list[str],
-                  repair: dict[str, dict[str, str]], only: set[str] | None = None) -> None:
+                  repair: dict[str, dict[str, str]], only: set[str] | None = None,
+                  fileops=None, maximum: int = 0, clashes: list | None = None) -> None:
     """An import's *Repair from AO3*: each chosen file is replaced with AO3's latest version,
     whatever it holds - the person chose it on the dating page, as the way to date a file they
     could not. It goes into `superseded`, out of `plan['keep']`, and its work into `stale`, so
@@ -3198,6 +3204,15 @@ def repair_copies(records: list[dict], plan: dict, filetypes: list[str],
             if copy is None:
                 print(strings.AO3_INFO_REPAIR_NOTHING.format(filetype.upper(), work))
                 continue
+            # the new file would be saved under the name another file already has - writing
+            # over that one is not what was asked, so this one is left for the reader
+            date = parse_text.get_date_stamp(record.get('date_updated') or '')
+            name = os.path.basename(str(copy['path']).replace('\\', '/'))
+            if fileops is not None and date:
+                wanted = repair_target_name(record, date, name, maximum)
+                if wanted != name and fileops.exists(os.path.join(os.path.dirname(str(copy['path'])), wanted)):
+                    repair_clash(clashes, work, record, filetype, name, wanted, strings.SOURCE_AO3)
+                    continue
             print(strings.AO3_INFO_REPAIR_FILE.format(
                 filetype.upper(), work, os.path.basename(str(copy['path']).replace('\\', '/'))))
             plan['superseded'].setdefault(link, {})[filetype] = copy['path']
@@ -3256,8 +3271,27 @@ def fichub_repairs(job: 'Job | None', work: str, existing: dict, record: dict,
     return allowed
 
 
+def repair_clash(clashes: list | None, work: str, record: dict, filetype: str, name: str,
+                 wanted: str, site: str) -> None:
+    """A repair not done, because the name it would give the file is another file's: said
+    now, and listed at the end of the run (`Ao3.repair_clashes`). Both files stay as they are."""
+
+    print(strings.AO3_INFO_REPAIR_CLASH.format(filetype.upper(), work, site, wanted, name))
+    if clashes is not None:
+        clashes.append({'id': work, 'link': record.get('link') or '', 'format': filetype.upper(),
+                        'file': name, 'wanted': wanted, 'site': site})
+
+
+def repair_target_name(record: dict, date: str, name: str, maximum: int) -> str:
+    """The name a repaired file gets: as its entry names the work, with the date given - the
+    same name a download from the index is saved under (`download_one_indexed`)."""
+
+    return indexed_file_name(record, date, os.path.splitext(name)[1], maximum)
+
+
 def rename_with_date(fileops, work: str, existing: dict, record: dict, filetypes: list[str],
-                     maximum: int, site: str, guesses: dict[str, str] | None = None) -> None:
+                     maximum: int, site: str, guesses: dict[str, str] | None = None,
+                     clashes: list | None = None) -> None:
     """An import's files to repair, **named with the site's date rather than replaced**, as the
     person chose before the run: from AO3 where it has the work (`repairRenameOnly`), or from
     FicHub where AO3 did not give it (`repairFicHubRename`). Each keeps its contents and is
@@ -3287,9 +3321,12 @@ def rename_with_date(fileops, work: str, existing: dict, record: dict, filetypes
                 print(strings.AO3_INFO_REPAIR_RENAME_OLDER.format(
                     kind, work, parse_text.written_date(date), parse_text.written_date(guess), name))
                 continue
-        wanted = indexed_file_name(record, date, os.path.splitext(name)[1], maximum)
+        wanted = repair_target_name(record, date, name, maximum)
         new = os.path.join(os.path.dirname(path), wanted)
-        if wanted == name or fileops.exists(new) or not fileops.rename_file(path, new):
+        if wanted != name and fileops.exists(new):
+            repair_clash(clashes, work, record, kind, name, wanted, site)
+            continue
+        if wanted == name or not fileops.rename_file(path, new):
             print(strings.AO3_INFO_REPAIR_RENAME_TAKEN.format(kind, work, site, wanted, name))
             continue
         print(strings.AO3_INFO_REPAIR_RENAMED.format(
@@ -3405,7 +3442,7 @@ def run_fic_list(job: Job, fileops: FileOps, repo: Repository, report, importing
             # where AO3 gave the work, its files to repair are only named with AO3's date - so
             # nothing is downloaded for them; one AO3 did not give goes to FicHub at the end
             print(strings.AO3_INFO_IMPORT_RENAMING.format(sum(len(x) for x in repair.values())))
-            rename_from_ao3(fileops, records, repair)
+            rename_from_ao3(fileops, records, repair, ao3.repair_clashes)
             repair = {}
         # a work with a file to repair is downloaded for it - only for it, if it was otherwise
         # only looked up (`repair_copies`)
@@ -4637,10 +4674,19 @@ def rescue_one(ao3, failure: dict, entry: dict | None, existing: dict, filetypes
             rename_with_date(ao3.fileops, work, existing, record, considered, maximum,
                              strings.SOURCE_FICHUB,
                              targets_named(job, work) if job.options.get('repairFicHubCheck', True)
-                             else None)
+                             else None, clashes=ao3.repair_clashes)
             repairing = {}
         else:
             repairing = fichub_repairs(job, work, existing, record, considered) if considered else {}
+            # FicHub's copy would be saved under a name another file already has: not repaired
+            fichub_date = parse_text.get_date_stamp(record.get('date_updated') or '')
+            for filetype, path in list(repairing.items()):
+                name = os.path.basename(str(path).replace('\\', '/'))
+                wanted = repair_target_name(record, fichub_date, name, maximum)
+                if wanted != name and ao3.fileops.exists(os.path.join(os.path.dirname(str(path)), wanted)):
+                    repair_clash(ao3.repair_clashes, work, record, filetype, name, wanted,
+                                 strings.SOURCE_FICHUB)
+                    repairing.pop(filetype)
         filetypes = [x for x in filetypes if x not in considered]
         if behind:
             if not older_fichub_formats(job, failure, existing,
@@ -5855,6 +5901,11 @@ def report_failures(ao3: Ao3, report) -> None:
     if isinstance(older, list) and older:
         print(strings.AO3_INFO_FICHUB_OLDER_COPIES.format(len(older)))
         progress.report(report, progress.FICHUB_OLDER, fichubOlder=older)
+
+    clashes = getattr(ao3, 'repair_clashes', None)
+    if isinstance(clashes, list) and clashes:
+        print(strings.AO3_INFO_REPAIR_CLASHES.format(len(clashes)))
+        progress.report(report, progress.REPAIR_CLASHES, repairClashes=clashes)
 
     rescued = getattr(ao3, 'rescued', None)
     if isinstance(rescued, list) and rescued:
