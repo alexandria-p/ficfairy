@@ -283,8 +283,24 @@ input[type='date'] {
   border: 0;
 }
 
-.repair-fichub .deeper {
-  margin-left: 48px;
+.fichub-answers {
+  display: grid;
+  gap: 6px;
+  margin: 2px 0 10px;
+}
+
+.fichub-answers label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.fichub-answers select {
+  font: inherit;
+  width: auto;
+  min-width: 5.5em;
+  flex: none;
 }
 
 .repair-ao3 {

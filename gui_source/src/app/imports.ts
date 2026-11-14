@@ -582,6 +582,9 @@ export interface ImportRequest {
   /** agreed before the run: FicHub may repair a file AO3 would not give, when its copy is as new
    * as a date guessed from the file's name */
   repairFicHub?: boolean;
+  /** for either FicHub choice: a file whose name looks dated no later than FicHub's copy is
+   *  repaired (on unless sent false) */
+  repairFicHubOlder?: boolean;
   /** agreed too: FicHub may repair one whose name has no date to guess */
   repairFicHubUndated?: boolean;
   /** instead: a file AO3 would not give is kept and named with FicHub's date, never over another */

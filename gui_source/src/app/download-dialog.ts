@@ -738,17 +738,16 @@ export class DownloadDialog implements OnDestroy {
       lines.push(importing.repairRenameOnly
         ? `Name ${files} with AO3's date for the work - nothing downloaded`
         : `Repair ${files} from AO3, replacing ${repairs === 1 ? 'it' : 'each'} with the latest version`);
-      const checked = importing.repairFicHubCheck !== false;
-      if (importing.repairFicHub) {
-        lines.push(!checked
-          ? "Where AO3 can't, overwrite with FicHub's copy - for every file"
-          : importing.repairFicHubUndated
-            ? "Where AO3 can't, use FicHub's copy - when it is as new as the date guessed from the file's name, or no date can be guessed"
-            : "Where AO3 can't, use FicHub's copy - only when it is as new as the date guessed from the file's name");
-      } else if (importing.repairFicHubRename) {
-        lines.push(checked
-          ? "Where AO3 can't, name the file with FicHub's date - unless the date guessed from its name is later"
-          : "Where AO3 can't, name the file with FicHub's date - never over another file");
+      const older = importing.repairFicHubOlder !== false;
+      const undated = !!importing.repairFicHubUndated;
+      const which = older && undated
+        ? "when the date guessed from the file's name is the same or older, or no date can be guessed"
+        : older ? "only when the date guessed from the file's name is the same or older"
+          : undated ? 'only when no date can be guessed from the file\'s name' : '';
+      if ((importing.repairFicHub || importing.repairFicHubRename) && which) {
+        lines.push(importing.repairFicHub
+          ? `Where AO3 can't, overwrite with FicHub's copy - ${which}`
+          : `Where AO3 can't, name the file with FicHub's date - ${which}`);
       }
     }
     return lines;
@@ -2149,6 +2148,7 @@ export class DownloadDialog implements OnDestroy {
               indexOnly: this.importing()?.indexOnly ?? [],
               repair: this.importing()?.repair ?? [],
               repairFicHub: !!this.importing()?.repairFicHub,
+              repairFicHubOlder: this.importing()?.repairFicHubOlder !== false,
               repairFicHubUndated: !!this.importing()?.repairFicHubUndated,
               repairFicHubRename: !!this.importing()?.repairFicHubRename,
               repairFicHubCheck: this.importing()?.repairFicHubCheck !== false,

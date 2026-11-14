@@ -109,7 +109,7 @@ def test_resolve_options_defaults_match_the_console_defaults():
         'overwrite': False, 'floorRun': '', 'nonBookmarks': False, 'resume': '', 'retryMode': '',
         'collectionWorks': False, 'subcollections': False, 'parentCollections': False,
         'replaceOutdated': False, 'indexOnly': [],
-        'repair': [], 'repairFicHub': False, 'repairFicHubUndated': False,
+        'repair': [], 'repairFicHub': False, 'repairFicHubOlder': True, 'repairFicHubUndated': False,
         'repairFicHubRename': False, 'repairFicHubCheck': True, 'repairRenameOnly': False,
     }
 
@@ -127,7 +127,7 @@ def test_resolve_options_reads_what_was_asked_for():
                       'overwrite': True, 'floorRun': '', 'nonBookmarks': True,
                       'resume': '', 'retryMode': '', 'collectionWorks': True, 'subcollections': True,
                       'parentCollections': True, 'replaceOutdated': False, 'indexOnly': [],
-                      'repair': [], 'repairFicHub': False, 'repairFicHubUndated': False,
+                      'repair': [], 'repairFicHub': False, 'repairFicHubOlder': True, 'repairFicHubUndated': False,
                       'repairFicHubRename': False, 'repairFicHubCheck': True,
                       'repairRenameOnly': False}
 

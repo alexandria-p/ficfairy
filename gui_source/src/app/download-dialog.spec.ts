@@ -2968,20 +2968,22 @@ describe('DownloadDialog', () => {
       expect(lines).toEqual([
         'Lookup 2 works with missing index',
         'Repair 2 files with no date from AO3, replacing each with the latest version',
-        "Where AO3 can't, use FicHub's copy - only when it is as new as the date guessed from the file's name",
+        "Where AO3 can't, overwrite with FicHub's copy - only when the date guessed from the file's name is the same or older",
       ]);
       await advanceTo('running');
       expect(jobs.started[0].options.repair).toEqual(['1 A.html', '2 B.pdf']);
       expect(jobs.started[0].options.repairFicHub).toBe(true);
       expect(jobs.started[0].options.repairFicHubUndated).toBe(false);
+      expect(jobs.started[0].options.repairFicHubOlder).toBe(true);
       expect(jobs.started[0].options.repairFicHubRename).toBe(false);
     });
 
     it("says, and sends, that a file AO3 can't give is named with FicHub's date instead", async () => {
       await openImport({ ...IMPORT, filetypes: ['JSON'], replaceOutdated: false, scope: 'skip',
-                         repair: ['1 A.html'], repairFicHubRename: true });
+                         repair: ['1 A.html'], repairFicHubRename: true, repairFicHubOlder: false,
+                         repairFicHubUndated: true });
       const lines = [...element.querySelectorAll('.import-summary li')].map((li) => li.textContent?.trim());
-      expect(lines).toContain("Where AO3 can't, name the file with FicHub's date - unless the date guessed from its name is later");
+      expect(lines).toContain("Where AO3 can't, name the file with FicHub's date - only when no date can be guessed from the file's name");
       await advanceTo('running');
       expect(jobs.started[0].options.repairFicHubRename).toBe(true);
     });

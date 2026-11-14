@@ -434,6 +434,10 @@ def test_ficHubs_part_in_a_repair_needs_files_to_repair_and_the_first_agreement(
     _, [job], _ = start_request(server.ACTION_IMPORT, '1', repair=['1 Fic.html'],
                                 repairFicHub=True, repairFicHubUndated=True)
     assert (job.options['repairFicHub'], job.options['repairFicHubUndated']) == (True, True)
+    # naming with FicHub's date takes the same answer
+    _, [job], _ = start_request(server.ACTION_IMPORT, '1', repair=['1 Fic.html'],
+                                repairFicHubRename=True, repairFicHubUndated=True)
+    assert job.options['repairFicHubUndated'] is True
 
 
 def test_naming_with_fichubs_date_is_a_repairs_other_answer_to_ao3_failing():

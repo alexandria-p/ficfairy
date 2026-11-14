@@ -715,15 +715,27 @@
               </span>
             </span>
           </label>
-          <label class="check nested">
-            <input type="checkbox" name="renameCheck" [checked]="renameCheck()"
-                   [disabled]="repairFallback() !== 'rename'"
-                   (change)="renameCheck.set($any($event.target).checked)" />
-            <span>
-              Only when no date can be guessed from the file's name, or the guessed date is the same
-              as or older than FicHub's
-            </span>
-          </label>
+          @if (repairFallback() === 'rename') {
+            <div class="fichub-answers nested">
+              <label>
+                <span>Rename files that seem to have an older date than FicHub's?</span>
+                <select name="renameOlder" [value]="renameOlder() ? 'yes' : 'no'"
+                        (change)="renameOlder.set($any($event.target).value === 'yes')">
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </label>
+              <label>
+                <span>Rename files that have no date that can be guessed?</span>
+                <select name="renameUndated" [value]="renameUndated() ? 'yes' : 'no'"
+                        (change)="renameUndated.set($any($event.target).value === 'yes')">
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </label>
+              <span class="hint">A file whose name seems to have a later date than FicHub's is never renamed.</span>
+            </div>
+          }
           <label class="check">
             <input type="radio" name="repairFallback" value="replace" [checked]="repairFallback() === 'replace'"
                    (change)="repairFallback.set('replace')" />
@@ -732,23 +744,30 @@
               <span class="hint">Replaced with FicHub's copy, named with its date.</span>
             </span>
           </label>
-          <label class="check nested">
-            <input type="checkbox" name="replaceCheck" [checked]="replaceCheck()"
-                   [disabled]="repairFallback() !== 'replace'"
-                   (change)="replaceCheck.set($any($event.target).checked)" />
-            <span>
-              Only when the date guessed from the file's name is the same as or older than FicHub's
-            </span>
-          </label>
-          <label class="check nested deeper">
-            <input type="checkbox" name="repairFicHubUndated" [checked]="repairFicHubUndated()"
-                   [disabled]="repairFallback() !== 'replace' || !replaceCheck()"
-                   (change)="repairFicHubUndated.set($any($event.target).checked)" />
-            <span>
-              Also when no date can be guessed from the file's name
-              <span class="hint">There is nothing to compare it with, so FicHub's copy may be older than yours.</span>
-            </span>
-          </label>
+          @if (repairFallback() === 'replace') {
+            <div class="fichub-answers nested">
+              <label>
+                <span>Overwrite files that seem to have an older date than FicHub's?</span>
+                <select name="replaceOlder" [value]="replaceOlder() ? 'yes' : 'no'"
+                        (change)="replaceOlder.set($any($event.target).value === 'yes')">
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </label>
+              <label>
+                <span>Overwrite files that have no date that can be guessed?</span>
+                <select name="replaceUndated" [value]="replaceUndated() ? 'yes' : 'no'"
+                        (change)="replaceUndated.set($any($event.target).value === 'yes')">
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </label>
+              <span class="hint">
+                A file whose name seems to have a later date than FicHub's is never overwritten. With no
+                date to compare, FicHub's copy may be older than yours.
+              </span>
+            </div>
+          }
         </fieldset>
       }
     </section>

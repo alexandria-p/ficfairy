@@ -1115,7 +1115,18 @@ describe('ImportDialog', () => {
     return element.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
   }
 
-  it("warns of FicHub's cache, leaves the file as it is to begin with, and offers each choice's own condition", async () => {
+  function answer(name: string): HTMLSelectElement | null {
+    return element.querySelector<HTMLSelectElement>(`select[name="${name}"]`);
+  }
+
+  async function answerWith(name: string, value: string) {
+    const select = answer(name)!;
+    select.value = value;
+    select.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+  }
+
+  it("warns of FicHub's cache, leaves the file as it is to begin with, and shows each choice's questions only under it", async () => {
     await open();
     await click('Continue');
     await click('Repair remaining from AO3');
@@ -1126,26 +1137,29 @@ describe('ImportDialog', () => {
     expect(fallback('keep').checked).toBe(true);
     expect(fallback('rename').closest('label')!.textContent).toContain('Only rename the file');
     expect(fallback('replace').closest('label')!.textContent).toContain('Overwrite and rename the file');
-    // each condition is ticked, and usable only under its own choice
-    expect(tickBox('renameCheck').checked).toBe(true);
-    expect(tickBox('renameCheck').disabled).toBe(true);
-    expect(tickBox('replaceCheck').checked).toBe(true);
-    expect(tickBox('replaceCheck').disabled).toBe(true);
-    expect(tickBox('repairFicHubUndated').disabled).toBe(true);
+    // nothing to answer while the file is left as it is
+    expect(element.querySelector('.fichub-answers')).toBeNull();
+
     fallback('rename').click();
     await fixture.whenStable();
-    expect(tickBox('renameCheck').disabled).toBe(false);
+    expect(answer('renameOlder')!.closest('label')!.textContent).toContain(
+      "Rename files that seem to have an older date than FicHub's?");
+    expect(answer('renameUndated')!.closest('label')!.textContent).toContain(
+      'Rename files that have no date that can be guessed?');
+    expect([answer('renameOlder')!.value, answer('renameUndated')!.value]).toEqual(['yes', 'yes']);
+    expect(answer('replaceOlder')).toBeNull();
+
     fallback('replace').click();
     await fixture.whenStable();
-    expect(tickBox('replaceCheck').disabled).toBe(false);
-    expect(tickBox('repairFicHubUndated').disabled).toBe(false);
-    // the third is only under the second
-    tickBox('replaceCheck').click();
-    await fixture.whenStable();
-    expect(tickBox('repairFicHubUndated').disabled).toBe(true);
+    expect(answer('renameOlder')).toBeNull();
+    expect(answer('replaceOlder')!.closest('label')!.textContent).toContain(
+      "Overwrite files that seem to have an older date than FicHub's?");
+    expect(answer('replaceUndated')!.closest('label')!.textContent).toContain(
+      'Overwrite files that have no date that can be guessed?');
+    expect([answer('replaceOlder')!.value, answer('replaceUndated')!.value]).toEqual(['yes', 'no']);
   });
 
-  it('hands the run only renaming where AO3 has the work, and FicHub overwriting every file when its condition is off', async () => {
+  it('hands the run only renaming where AO3 has the work, and the answers given for overwriting with FicHub', async () => {
     await open([], false, INDEXED_UNDATED);
     await click('Continue');
     await click('Repair remaining from AO3');
@@ -1153,15 +1167,15 @@ describe('ImportDialog', () => {
     element.querySelector<HTMLInputElement>('input[name="repairAo3"][value="rename"]')!.click();
     fallback('replace').click();
     await fixture.whenStable();
-    tickBox('replaceCheck').click();
-    await fixture.whenStable();
+    await answerWith('replaceOlder', 'no');
+    await answerWith('replaceUndated', 'yes');
     await click('Continue');
     element.querySelector<HTMLInputElement>('input[name="updateScope"][value="skip"]')?.click();
     await fixture.whenStable();
     await click('Continue');
 
     expect(started[0].request).toMatchObject({
-      repairRenameOnly: true, repairFicHub: true, repairFicHubCheck: false, repairFicHubUndated: false,
+      repairRenameOnly: true, repairFicHub: true, repairFicHubOlder: false, repairFicHubUndated: true,
     });
   });
 
@@ -1197,12 +1211,15 @@ describe('ImportDialog', () => {
     await click('Continue');
     fallback('rename').click();
     await fixture.whenStable();
+    await answerWith('renameUndated', 'no');
     await click('Continue');
     element.querySelector<HTMLInputElement>('input[name="updateScope"][value="skip"]')?.click();
     await fixture.whenStable();
     await click('Continue');
 
-    expect(started[0].request).toMatchObject({ repairFicHub: false, repairFicHubRename: true });
+    expect(started[0].request).toMatchObject({
+      repairFicHub: false, repairFicHubRename: true, repairFicHubOlder: true, repairFicHubUndated: false,
+    });
   });
 
   it("leaves a work out of the index question when a file of it is being repaired, since the repair indexes it", async () => {
@@ -1672,6 +1689,7 @@ describe('ImportDialog', () => {
       files: 1,
       repair: [],
       repairFicHub: false,
+      repairFicHubOlder: true,
       repairFicHubUndated: false,
       repairFicHubRename: false,
       repairFicHubCheck: true,

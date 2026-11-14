@@ -878,12 +878,14 @@ export class ImportDialog {
    * never over another file (`rename`).
    */
   protected readonly repairFallback = signal<'keep' | 'replace' | 'rename'>('keep');
-  /** FicHub's renaming, only where its date is not older than the date guessed from the name */
-  protected readonly renameCheck = signal(true);
-  /** FicHub's replacing, only where its copy is not older than the date guessed from the name */
-  protected readonly replaceCheck = signal(true);
-  /** replacing so, agreed to as well when no date can be guessed from the file's name at all */
-  protected readonly repairFicHubUndated = signal(false);
+  /**
+   * Under each FicHub choice, its two answers: a file whose name looks dated no later than
+   * FicHub's copy, and one with no date to guess. A name that looks newer is never touched.
+   */
+  protected readonly renameOlder = signal(true);
+  protected readonly renameUndated = signal(true);
+  protected readonly replaceOlder = signal(true);
+  protected readonly replaceUndated = signal(false);
   /** where AO3 has the work: overwrite and rename (to begin with), or only rename the file */
   protected readonly repairAo3 = signal<'overwrite' | 'rename'>('overwrite');
   /** before AO3 is asked: name each file with the last-updated date its work's FicFairy index
@@ -1387,12 +1389,14 @@ export class ImportDialog {
         files: this.filesOf(taken),
         repair: this.runRepairs().map((f) => f.name),
         repairFicHub: this.runRepairs().length > 0 && this.repairFallback() === 'replace',
-        repairFicHubUndated: this.runRepairs().length > 0 && this.repairFallback() === 'replace' &&
-          this.replaceCheck() && this.repairFicHubUndated(),
+        repairFicHubOlder: this.repairFallback() === 'rename' ? this.renameOlder()
+          : this.repairFallback() === 'replace' ? this.replaceOlder() : true,
+        repairFicHubUndated: this.runRepairs().length > 0 &&
+          (this.repairFallback() === 'rename' ? this.renameUndated()
+            : this.repairFallback() === 'replace' && this.replaceUndated()),
         repairFicHubRename: this.runRepairs().length > 0 && this.repairFallback() === 'rename',
-        // the guessed-date rule for whichever FicHub choice was made
-        repairFicHubCheck: this.repairFallback() === 'rename' ? this.renameCheck()
-          : this.repairFallback() === 'replace' ? this.replaceCheck() : true,
+        // FicHub keeps to the date guessed from each name: a name that looks newer is left alone
+        repairFicHubCheck: true,
         repairRenameOnly: this.runRepairs().length > 0 && this.repairAo3() === 'rename',
       },
       dated: this.dated(),

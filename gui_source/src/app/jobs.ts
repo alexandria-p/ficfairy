@@ -134,6 +134,8 @@ export interface JobOptions {
   repair?: string[];
   /** an import: FicHub may repair a file AO3 would not give, when as new as the date its name suggests */
   repairFicHub?: boolean;
+  /** an import: when the date guessed from the file's name is no later than FicHub's */
+  repairFicHubOlder?: boolean;
   /** an import: and when no date can be guessed from the file's name */
   repairFicHubUndated?: boolean;
   /** an import: instead, keep such a file and name it with FicHub's date, never over another */
