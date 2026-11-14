@@ -1248,6 +1248,25 @@ describe('ImportDialog', () => {
     expect(step()).toBe('formats');
   });
 
+  it('renames the files given a date before the repair page, which comes after them', async () => {
+    await open();
+    await click('Continue');
+    await type(dateBox('works/2 C - D.html'), '2024-05-06');
+    await click('Repair remaining from AO3');
+    await click('Continue');
+
+    expect(step()).toBe('dating');
+    expect(store.renamed).toEqual([['works/2 C - D.html', 'works/2 C - D 2024-05-06.html']]);
+    await click('Continue');
+    expect(step()).toBe('repair');
+    // the dates are renamed now, so the repair page goes no further back
+    expect(button('Back')).toBeUndefined();
+    await click('Continue');
+    expect(step()).toBe('index');
+    await click('Back');
+    expect(step()).toBe('repair');
+  });
+
   describe('repairing from the FicFairy index first', () => {
     const indexed = () => TestBed.inject(Library).worksById.set(new Map([
       ['7', { id: '7', title: 'The Fic', authors: ['Writer'], date_updated: '14 Dec 2024' } as Bookmark]]));
@@ -1276,14 +1295,23 @@ describe('ImportDialog', () => {
       indexFirst().click();
       await fixture.whenStable();
       await click('Continue');
-
-      expect(store.renamed).toEqual([['works/7 old name.html', 'works/7 The Fic - Writer 2024-12-14.html']]);
-      await click('Continue');
+      // nothing renamed until every question is answered: the formats page comes first
+      expect(step()).toBe('formats');
+      expect(store.renamed).toEqual([]);
       element.querySelector<HTMLInputElement>('input[name="updateScope"][value="skip"]')?.click();
       await fixture.whenStable();
-      button('Done')?.click() ?? button('Continue')?.click();
+      primary().click();
       await settle();
+
+      expect(step()).toBe('dating');
+      expect(store.renamed).toEqual([['works/7 old name.html', 'works/7 The Fic - Writer 2024-12-14.html']]);
+      expect(element.querySelector('.dated-said')!.textContent!.replace(/\s+/g, ' ')).toContain(
+        'Dated 1 file from your FicFairy index.');
+      // nothing left for a run: the window ends there
+      expect(primary().textContent!.trim()).toBe('Done');
+      await click('Done');
       expect(started).toEqual([]);
+      expect(closed.length).toBe(1);
     });
 
     it('never renames over another file, and lists the clash', async () => {
@@ -1296,6 +1324,10 @@ describe('ImportDialog', () => {
       indexFirst().click();
       await fixture.whenStable();
       await click('Continue');
+      element.querySelector<HTMLInputElement>('input[name="updateScope"][value="skip"]')?.click();
+      await fixture.whenStable();
+      primary().click();
+      await settle();
 
       expect(store.renamed).toEqual([]);
       const said = element.querySelector('.index-clashes')!.textContent!.replace(/\s+/g, ' ');

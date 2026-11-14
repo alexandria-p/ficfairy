@@ -1228,29 +1228,18 @@ export class ImportDialog {
     return this.toLookUp().length ? 'index' : 'formats';
   }
 
+  /** after the dates and their renaming: the repair page when files are to be repaired */
+  private afterDating(): Step {
+    return this.toRepair().length ? 'repair' : this.afterDatesStep();
+  }
+
   /**
-   * From the dates: with files to repair, their own page first - what happens to a file AO3
-   * cannot give is asked there, not on the dates page - then the dating
+   * From the dates: the files given a date are renamed at once, on a page of its own; the repair
+   * page comes after, then the index and formats. Files repaired from the FicFairy index are
+   * renamed last of all, once every question is answered (`finish`)
    */
   protected async fromDates(): Promise<void> {
     if (this.needsAnswer().length) return;
-    if (this.toRepair().length) {
-      this.step.set('repair');
-      return;
-    }
-    await this.dateChosen();
-  }
-
-  protected async fromRepair(): Promise<void> {
-    await this.dateChosen();
-  }
-
-  /** rename the files given a date, on a page of its own; none to rename goes straight on */
-  private async dateChosen(): Promise<void> {
-    if (this.needsAnswer().length) return;
-    const store = this.store();
-    const fromIndex = this.fromIndexRepairs();
-    const chosen = [...this.toDate(), ...fromIndex];
     const skipped = this.undated().filter((f) => this.skipped()[f.path]);
     if (this.rememberSkips() && skipped.length && !this.busy()) {
       try {
@@ -1260,28 +1249,50 @@ export class ImportDialog {
         // not written: they are offered for dating again next time, which loses nothing
       }
     }
-    if (!chosen.length || !store || this.busy()) {
-      this.step.set(this.afterDatesStep());
+    const chosen = this.toDate();
+    if (!chosen.length || !this.store() || this.busy()) {
+      this.step.set(this.afterDating());
       return;
     }
+    await this.renameWithDates(chosen, 'dates');
+  }
+
+  protected fromRepair(): void {
+    this.step.set(this.afterDatesStep());
+  }
+
+  /** which renaming the dating page is showing: the dates given, or the repairs from the index */
+  protected readonly datingRound = signal<'dates' | 'index'>('dates');
+  /** what the renaming on show did - `dated` holds every rename the window has made */
+  protected readonly round = signal<DatingResult | null>(null);
+  /** the repairs from the FicFairy index have been renamed (or tried), so `finish` goes on */
+  private readonly indexRepaired = signal(false);
+
+  /** rename these files with their dates, on the dating page; the cross stops it after the one in hand */
+  private async renameWithDates(chosen: FoundFile[], which: 'dates' | 'index'): Promise<void> {
+    const store = this.store();
+    if (!store) return;
+    this.datingRound.set(which);
     this.step.set('dating');
     this.dating.set(true);
     this.stopDating = false;
     const result: DatingResult = { renamed: [], failed: [] };
-    this.dated.set(result);
+    this.round.set(result);
     this.datingProgress.set({ done: 0, total: chosen.length });
     const entries = this.library.worksById();
     const indexDates = this.indexDates();
     const items: ToDate[] = chosen.map((file) => ({
       file,
-      date: this.dates()[file.path] || indexDates[file.path],
+      date: which === 'index' ? indexDates[file.path] : this.dates()[file.path],
       record: entries.get(file.id) as object | undefined,
     }));
     // the helper names every file, by the app's own pattern - the page only falls back to
     // adding the date to the end when it does not answer
     const named = await renamesFor(items, (files) => this.jobs.fileNames(files));
     // a repair from the index never lands on another file's name: held back and listed
-    const renames = await this.holdIndexClashes(store, named, new Set(fromIndex.map((f) => f.path)));
+    const renames = which === 'index'
+      ? await this.holdIndexClashes(store, named, new Set(chosen.map((f) => f.path)))
+      : named;
     await dateFiles(
       store,
       renames,
@@ -1299,7 +1310,11 @@ export class ImportDialog {
         // not written: that work's index question may be asked again, which loses nothing
       }
     }
-    this.dated.set({ ...result });
+    this.round.set({ ...result });
+    this.dated.update((d) => ({
+      renamed: [...(d?.renamed ?? []), ...result.renamed],
+      failed: [...(d?.failed ?? []), ...result.failed],
+    }));
     this.dating.set(false);
   }
 
@@ -1334,7 +1349,8 @@ export class ImportDialog {
   }
 
   protected fromDating(): void {
-    this.step.set(this.afterDatesStep());
+    if (this.datingRound() === 'index') void this.finish();
+    else this.step.set(this.afterDating());
   }
 
   /** the formats page only when some work could be updated; with none, the window is done */
@@ -1344,12 +1360,14 @@ export class ImportDialog {
   }
 
   protected backFrom(step: 'dates' | 'repair' | 'index' | 'formats'): void {
-    // the page before the index or the formats, when nothing has been renamed yet
-    const datesEnd: Step = this.toRepair().length ? 'repair' : 'dates';
+    // the repair page is only choices, so it can always be gone back to; the dates only while
+    // nothing has been renamed yet
+    const beforeIndex: Step = this.toRepair().length ? 'repair'
+      : this.dated() ? 'overview' : this.undated().length ? 'dates' : 'overview';
     if (step === 'dates') this.step.set(this.groups().length && !this.removed() ? 'duplicates' : 'overview');
-    else if (step === 'repair') this.step.set('dates');
-    else if (step === 'index') this.step.set(this.dated() ? 'overview' : this.undated().length ? datesEnd : 'overview');
-    else this.step.set(this.toLookUp().length ? 'index' : this.dated() ? 'overview' : this.undated().length ? datesEnd : 'overview');
+    else if (step === 'repair') this.step.set(this.dated() ? 'overview' : 'dates');
+    else if (step === 'index') this.step.set(beforeIndex);
+    else this.step.set(this.toLookUp().length ? 'index' : beforeIndex);
   }
 
   /** no going back to the dates once files are renamed: they would be offered for dating again */
@@ -1360,6 +1378,12 @@ export class ImportDialog {
    * for one to do - is handed to the run window. Otherwise the window simply closes.
    */
   protected async finish(): Promise<void> {
+    // the files repaired from the FicFairy index are renamed last, once every question is answered
+    if (this.fromIndexRepairs().length && !this.indexRepaired() && this.store() && !this.busy()) {
+      this.indexRepaired.set(true);
+      await this.renameWithDates(this.fromIndexRepairs(), 'index');
+      return;
+    }
     if (this.lookup() === 'never' && this.toLookUp().length) {
       try {
         if (this.sandbox()) this.note(`index list: ${this.toLookUp().map((w) => w.id).join(', ')}`);

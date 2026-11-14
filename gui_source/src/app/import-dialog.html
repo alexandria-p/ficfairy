@@ -774,7 +774,9 @@
       }
     </section>
     <footer>
-      <button type="button" class="button subtle" (click)="backFrom('repair')">Back</button>
+      @if (canGoBack()) {
+        <button type="button" class="button subtle" (click)="backFrom('repair')">Back</button>
+      }
       <button type="button" class="button primary" [disabled]="busy()" (click)="fromRepair()">Continue</button>
     </footer>
   }
@@ -784,18 +786,20 @@
     <section class="body">
       @if (dating()) {
         <p class="dating-progress" role="status">
-          Dating files... {{ datingProgress().done | number }} of {{ datingProgress().total | number }}
+          {{ datingRound() === 'index' ? 'Dating files from your FicFairy index...' : 'Dating files...' }}
+          {{ datingProgress().done | number }} of {{ datingProgress().total | number }}
         </p>
       }
       <div class="bar" role="progressbar" [attr.aria-valuenow]="datingProgress().done"
            [attr.aria-valuemax]="datingProgress().total">
         <span [style.width.%]="datingProgress().total ? (datingProgress().done / datingProgress().total) * 100 : 0"></span>
       </div>
-      @if (!dating() && dated(); as d) {
+      @if (!dating() && round(); as d) {
         <p class="dated-said">
-          Dated {{ d.renamed.length | number }} {{ d.renamed.length === 1 ? 'file' : 'files' }}.
+          Dated {{ d.renamed.length | number }} {{ d.renamed.length === 1 ? 'file' : 'files' }}{{
+            datingRound() === 'index' ? ' from your FicFairy index' : '' }}.
         </p>
-        @if (indexClashes().length; as clashed) {
+        @if (datingRound() === 'index' && indexClashes().length; as clashed) {
           <details class="dating-failures index-clashes" [open]="clashed <= 5">
             <summary>
               {{ clashed | number }} {{ clashed === 1 ? 'file' : 'files' }} failed to repair from your
@@ -825,7 +829,7 @@
     </section>
     <footer>
       <button type="button" class="button primary" [disabled]="dating()" (click)="fromDating()">
-        Continue
+        {{ datingRound() === 'index' && !runs() ? 'Done' : 'Continue' }}
       </button>
     </footer>
   }
@@ -869,7 +873,7 @@
       }
     </section>
     <footer>
-      @if (canGoBack()) {
+      @if (canGoBack() || toRepair().length) {
         <button type="button" class="button subtle" (click)="backFrom('index')">Back</button>
       }
       <button type="button" class="button primary"
@@ -938,7 +942,7 @@
       }
     </section>
     <footer>
-      @if (canGoBack() || toLookUp().length) {
+      @if (canGoBack() || toLookUp().length || toRepair().length) {
         <button type="button" class="button subtle" (click)="backFrom('formats')">Back</button>
       }
       <button type="button" class="button primary" [disabled]="runs() && busy()" (click)="finish()">
