@@ -652,17 +652,36 @@
           <strong>How should {{ repairs === 1 ? 'the file' : 'the ' + (repairs | number) + ' files' }}
           you chose to repair be repaired?</strong>
         </p>
+        <fieldset class="repair-fallback repair-index">
+          <legend>First, your FicFairy index</legend>
+          <label class="check">
+            <input type="checkbox" name="indexFirst" [checked]="indexFirst()"
+                   (change)="indexFirst.set($any($event.target).checked)" />
+            <span>
+              First try the last updated date in your FicFairy index
+              <span class="hint">
+                Where your index already has a last updated date for the work, the file keeps what it
+                holds and is renamed to include that date - AO3 isn't asked. That date may not be the
+                version your file actually holds. Files whose work has no date in your index go to
+                AO3, then FicHub, as chosen below.
+              </span>
+              <span class="hint index-first-count">
+                {{ indexDateCount() | number }} of the {{ repairs | number }}
+                {{ repairs === 1 ? 'file has' : 'files have' }} a date in your index.
+              </span>
+            </span>
+          </label>
+        </fieldset>
         <fieldset class="repair-fallback repair-ao3">
-          <legend>If AO3 has the work</legend>
+          <legend>{{ indexFirst() ? 'Then, if AO3 has the work' : 'If AO3 has the work' }}</legend>
           <label class="check">
             <input type="radio" name="repairAo3" value="rename" [checked]="repairAo3() === 'rename'"
                    (change)="repairAo3.set('rename')" />
             <span>
               Only rename the file
               <span class="hint">
-                Your file keeps what it holds, and is named with the date AO3 last updated the work -
-                never over another file. Nothing is downloaded. That date may not be the version your
-                file holds.
+                Your file keeps what it holds, and is renamed to include the date AO3 last updated the
+                work. That date may not be the version your file actually holds.
               </span>
             </span>
           </label>
@@ -678,8 +697,7 @@
         <fieldset class="repair-fallback">
           <legend>If AO3 can't give it, and FicHub has to be used</legend>
           <p class="warning repair-warning" role="note">
-            FicHub keeps cached copies, which may be older than the newest version on AO3 - so its
-            date, and its copy, may be behind.
+            FicHub keeps cached copies, which may be older than the newest version on AO3.
           </p>
           <label class="check">
             <input type="radio" name="repairFallback" value="keep" [checked]="repairFallback() === 'keep'"
@@ -756,6 +774,20 @@
         <p class="dated-said">
           Dated {{ d.renamed.length | number }} {{ d.renamed.length === 1 ? 'file' : 'files' }}.
         </p>
+        @if (indexClashes().length; as clashed) {
+          <details class="dating-failures index-clashes" [open]="clashed <= 5">
+            <summary>
+              {{ clashed | number }} {{ clashed === 1 ? 'file' : 'files' }} failed to repair from your
+              FicFairy index due to a name clash
+            </summary>
+            <p class="hint">The name each would be given is already taken by another file, so both were kept as they are.</p>
+            <ul>
+              @for (clash of indexClashes(); track clash.path) {
+                <li><span class="file-name" [title]="clash.path">{{ clash.path }}</span> - {{ clash.wanted }} is already taken</li>
+              }
+            </ul>
+          </details>
+        }
         @if (d.failed.length) {
           <details class="dating-failures">
             <summary>
@@ -783,8 +815,15 @@
       <fieldset>
         <legend>Fetch their index entries from AO3 now?</legend>
         <p class="hint">
-          {{ works().length | number }} {{ works().length === 1 ? 'work has' : 'works have' }} no index entry.
+          {{ toLookUp().length | number }} {{ toLookUp().length === 1 ? 'work has' : 'works have' }} no index entry.
         </p>
+        @if (repairIndexes().length; as more) {
+          <p class="hint repair-indexes">
+            {{ more | number }} more {{ more === 1 ? 'work has' : 'works have' }} no index entry, but
+            {{ more === 1 ? 'is' : 'are' }} indexed anyway: a file of {{ more === 1 ? 'it is' : 'theirs is' }}
+            being repaired from AO3.
+          </p>
+        }
         <label class="check">
           <input type="radio" name="lookup" value="yes" [checked]="lookup() === 'yes'" (change)="lookup.set('yes')" />
           <span>Yes - look each work up on AO3 now and index it</span>
@@ -878,7 +917,7 @@
       }
     </section>
     <footer>
-      @if (canGoBack() || works().length) {
+      @if (canGoBack() || toLookUp().length) {
         <button type="button" class="button subtle" (click)="backFrom('formats')">Back</button>
       }
       <button type="button" class="button primary" [disabled]="runs() && busy()" (click)="finish()">

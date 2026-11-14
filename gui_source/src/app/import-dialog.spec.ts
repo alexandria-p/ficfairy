@@ -1102,7 +1102,8 @@ describe('ImportDialog', () => {
     const ao3 = (value: string) => element.querySelector<HTMLInputElement>(`input[name="repairAo3"][value="${value}"]`)!;
     expect(ao3('overwrite').checked).toBe(true);
     expect(ao3('rename').closest('label')!.textContent).toContain('Only rename the file');
-    expect(ao3('rename').closest('label')!.textContent).toContain('Nothing is downloaded');
+    expect(ao3('rename').closest('label')!.textContent?.replace(/\s+/g, ' ')).toContain(
+      'renamed to include the date AO3 last updated the work. That date may not be the version your file actually holds.');
     expect(ao3('overwrite').closest('label')!.textContent).toContain('Overwrite and rename the file');
   });
 
@@ -1120,7 +1121,8 @@ describe('ImportDialog', () => {
     await click('Repair remaining from AO3');
     await click('Continue');
 
-    expect(element.querySelector('.repair-warning')?.textContent).toContain('cached copies');
+    expect(element.querySelector('.repair-warning')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      'FicHub keeps cached copies, which may be older than the newest version on AO3.');
     expect(fallback('keep').checked).toBe(true);
     expect(fallback('rename').closest('label')!.textContent).toContain('Only rename the file');
     expect(fallback('replace').closest('label')!.textContent).toContain('Overwrite and rename the file');
@@ -1201,6 +1203,105 @@ describe('ImportDialog', () => {
     await click('Continue');
 
     expect(started[0].request).toMatchObject({ repairFicHub: false, repairFicHubRename: true });
+  });
+
+  it("leaves a work out of the index question when a file of it is being repaired, since the repair indexes it", async () => {
+    await open();
+    await click('Continue');
+    await click('Skip remaining');
+    repairBox('works/2 C - D.html').click();
+    await fixture.whenStable();
+    await click('Continue');
+    await click('Continue');
+
+    expect(step()).toBe('index');
+    const said = element.querySelector('section.body')!.textContent!.replace(/\s+/g, ' ');
+    // works 1 and 3 are asked about; 2 is indexed by its repair
+    expect(said).toContain('2 works have no index entry.');
+    expect(said).toContain('1 more work has no index entry, but is indexed anyway: a file of it is being repaired from AO3.');
+  });
+
+  it('skips the index question when every work missing an entry is being repaired', async () => {
+    await open(unindexedWorks(['works/2 C - D.html'], new Set()));
+    await click('Continue');
+    await click('Repair remaining from AO3');
+    await click('Continue');
+    await click('Continue');
+
+    expect(step()).toBe('formats');
+  });
+
+  describe('repairing from the FicFairy index first', () => {
+    const indexed = () => TestBed.inject(Library).worksById.set(new Map([
+      ['7', { id: '7', title: 'The Fic', authors: ['Writer'], date_updated: '14 Dec 2024' } as Bookmark]]));
+    const indexFirst = () => element.querySelector<HTMLInputElement>('input[name="indexFirst"]')!;
+
+    it('is offered off, and says how many files have a date in the index', async () => {
+      indexed();
+      await open([], false, INDEXED_UNDATED);
+      await click('Continue');
+      await click('Repair remaining from AO3');
+      await click('Continue');
+
+      expect(indexFirst().checked).toBe(false);
+      const said = indexFirst().closest('label')!.textContent!.replace(/\s+/g, ' ');
+      expect(said).toContain('First try the last updated date in your FicFairy index');
+      expect(said).toContain('1 of the 1 file has a date in your index.');
+    });
+
+    it("renames a file with its index entry's date and sends AO3 nothing for it", async () => {
+      indexed();
+      await open([], false, INDEXED_UNDATED);
+      await click('Continue');
+      await click('Repair remaining from AO3');
+      await click('Continue');
+      indexFirst().click();
+      await fixture.whenStable();
+      await click('Continue');
+
+      expect(store.renamed).toEqual([['works/7 old name.html', 'works/7 The Fic - Writer 2024-12-14.html']]);
+      await click('Continue');
+      element.querySelector<HTMLInputElement>('input[name="updateScope"][value="skip"]')?.click();
+      await fixture.whenStable();
+      button('Done')?.click() ?? button('Continue')?.click();
+      await settle();
+      expect(started).toEqual([]);
+    });
+
+    it('never renames over another file, and lists the clash', async () => {
+      indexed();
+      await open([], false, INDEXED_UNDATED);
+      store.listed = ['works/7 The Fic - Writer 2024-12-14.html'];
+      await click('Continue');
+      await click('Repair remaining from AO3');
+      await click('Continue');
+      indexFirst().click();
+      await fixture.whenStable();
+      await click('Continue');
+
+      expect(store.renamed).toEqual([]);
+      const said = element.querySelector('.index-clashes')!.textContent!.replace(/\s+/g, ' ');
+      expect(said).toContain('1 file failed to repair from your FicFairy index due to a name clash');
+      expect(said).toContain('works/7 The Fic - Writer 2024-12-14.html is already taken');
+    });
+
+    it('sends the run, for AO3 then FicHub, only the files the index has no date for', async () => {
+      indexed();
+      await open(unindexedWorks(['works/2 C - D.html'], new Set()), false, INDEXED_UNDATED);
+      await click('Continue');
+      await click('Repair remaining from AO3');
+      await click('Continue');
+      indexFirst().click();
+      await fixture.whenStable();
+      await click('Continue');
+      await click('Continue');
+      element.querySelector<HTMLInputElement>('input[name="updateScope"][value="skip"]')?.click();
+      await fixture.whenStable();
+      await click('Continue');
+
+      expect(started[0].request.repair).toEqual(['2 C - D.html']);
+      expect(started[0].request.links).toBe('https://archiveofourown.org/works/2');
+    });
   });
 
   it('runs for a file to repair even with nothing else for a run to do', async () => {

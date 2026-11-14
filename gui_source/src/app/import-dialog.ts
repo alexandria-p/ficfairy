@@ -25,7 +25,7 @@ import {
   isFileDate,
   renamesFor,
   undatedFiles, importIssueCounts, importIssueLines } from './imports';
-import { dateFromFilename } from './bookmarks';
+import { dateFromFilename, dateStamp } from './bookmarks';
 import { WORKS_FOLDER } from './library-setup';
 import { activePattern, patternText } from './naming';
 import { Misnamed, MisnamedFile, NameFormat } from './renames';
@@ -886,6 +886,31 @@ export class ImportDialog {
   protected readonly repairFicHubUndated = signal(false);
   /** where AO3 has the work: overwrite and rename (to begin with), or only rename the file */
   protected readonly repairAo3 = signal<'overwrite' | 'rename'>('overwrite');
+  /** before AO3 is asked: name each file with the last-updated date its work's FicFairy index
+   *  entry has, where it has one - off to begin with */
+  protected readonly indexFirst = signal(false);
+  /** files to repair whose work's index entry has a last-updated date, by path: that date */
+  protected readonly indexDates = computed(() => {
+    const entries = this.library.worksById();
+    const dates: Record<string, string> = {};
+    for (const file of this.toRepair()) {
+      const record = entries.get(file.id) as { date_updated?: string } | undefined;
+      const date = dateStamp(String(record?.date_updated ?? ''));
+      if (isFileDate(date)) dates[file.path] = date;
+    }
+    return dates;
+  });
+  protected readonly indexDateCount = computed(() => Object.keys(this.indexDates()).length);
+  /** the files repaired from the index, when that was chosen: renamed here, never sent to a run */
+  protected readonly fromIndexRepairs = computed(() =>
+    this.indexFirst() ? this.toRepair().filter((f) => this.indexDates()[f.path]) : []);
+  /** the files the run repairs from AO3, then FicHub */
+  protected readonly runRepairs = computed(() => {
+    const done = new Set(this.fromIndexRepairs().map((f) => f.path));
+    return this.toRepair().filter((f) => !done.has(f.path));
+  });
+  /** files repaired from the index that were not renamed: the name each would get is taken */
+  protected readonly indexClashes = signal<{ path: string; wanted: string }[]>([]);
   /** the files whose date `Infer date` set, and has not been changed by hand since */
   protected readonly inferred = signal<Record<string, boolean>>({});
   /** the rows' order, by path - by name, until `Infer date` moves what it dated to the top */
@@ -1077,7 +1102,17 @@ export class ImportDialog {
   });
 
   /** the works with no index entry that are looked up now */
-  protected readonly lookups = computed(() => (this.lookup() === 'yes' ? this.works().map((w) => w.id) : []));
+  /** works with no index entry that a repair from AO3 indexes anyway - not asked about */
+  protected readonly repairIndexes = computed(() => {
+    const repaired = new Set(this.runRepairs().map((f) => f.id));
+    return this.works().filter((w) => repaired.has(w.id));
+  });
+  /** the works with no index entry that the index page asks about */
+  protected readonly toLookUp = computed(() => {
+    const repaired = new Set(this.repairIndexes().map((w) => w.id));
+    return this.works().filter((w) => !repaired.has(w.id));
+  });
+  protected readonly lookups = computed(() => (this.lookup() === 'yes' ? this.toLookUp().map((w) => w.id) : []));
   /**
    * The works with date issues that can be updated: an undated file, of an indexed work or of
    * one looked up now - a work left unindexed is left alone altogether.
@@ -1121,7 +1156,7 @@ export class ImportDialog {
   protected readonly scope = computed(() => {
     const ids = new Set<string>(this.lookups());
     if (this.updates()) for (const id of this.updating()) ids.add(id);
-    for (const file of this.toRepair()) ids.add(file.id);
+    for (const file of this.runRepairs()) ids.add(file.id);
     return [...ids].map((id) => ({ id, files: [] }));
   });
   /** how many files the window knows of for these works - the copies a replacing run might fetch again */
@@ -1188,7 +1223,7 @@ export class ImportDialog {
 
   /** after the dates: the index question, when there are works without an entry */
   private afterDatesStep(): Step {
-    return this.works().length ? 'index' : 'formats';
+    return this.toLookUp().length ? 'index' : 'formats';
   }
 
   /**
@@ -1212,7 +1247,8 @@ export class ImportDialog {
   private async dateChosen(): Promise<void> {
     if (this.needsAnswer().length) return;
     const store = this.store();
-    const chosen = this.toDate();
+    const fromIndex = this.fromIndexRepairs();
+    const chosen = [...this.toDate(), ...fromIndex];
     const skipped = this.undated().filter((f) => this.skipped()[f.path]);
     if (this.rememberSkips() && skipped.length && !this.busy()) {
       try {
@@ -1233,14 +1269,17 @@ export class ImportDialog {
     this.dated.set(result);
     this.datingProgress.set({ done: 0, total: chosen.length });
     const entries = this.library.worksById();
+    const indexDates = this.indexDates();
     const items: ToDate[] = chosen.map((file) => ({
       file,
-      date: this.dates()[file.path],
+      date: this.dates()[file.path] || indexDates[file.path],
       record: entries.get(file.id) as object | undefined,
     }));
     // the helper names every file, by the app's own pattern - the page only falls back to
     // adding the date to the end when it does not answer
-    const renames = await renamesFor(items, (files) => this.jobs.fileNames(files));
+    const named = await renamesFor(items, (files) => this.jobs.fileNames(files));
+    // a repair from the index never lands on another file's name: held back and listed
+    const renames = await this.holdIndexClashes(store, named, new Set(fromIndex.map((f) => f.path)));
     await dateFiles(
       store,
       renames,
@@ -1262,6 +1301,36 @@ export class ImportDialog {
     this.dating.set(false);
   }
 
+  /**
+   * The index repairs whose new name is already a file's, or another file's new name in the
+   * same batch, taken out of the renames and listed (`indexClashes`) - both files kept.
+   */
+  private async holdIndexClashes(store: LibraryStore, renames: Rename[], repairs: Set<string>): Promise<Rename[]> {
+    this.indexClashes.set([]);
+    if (!repairs.size) return renames;
+    let listed: string[] = [];
+    try {
+      listed = await store.list(WORKS_FOLDER, false);
+    } catch {
+      // not listed: a rename over a file is still refused by the store, and said as a failure
+    }
+    const taken = new Set(listed.map((p) => p.toLowerCase()));
+    const wanted = new Map<string, number>();
+    for (const r of renames) if (r.to !== r.path) wanted.set(r.to.toLowerCase(), (wanted.get(r.to.toLowerCase()) ?? 0) + 1);
+    const held: { path: string; wanted: string }[] = [];
+    const clear = renames.filter((r) => {
+      const to = r.to.toLowerCase();
+      if (!repairs.has(r.path) || r.to === r.path) return true;
+      if (taken.has(to) || (wanted.get(to) ?? 0) > 1) {
+        held.push({ path: r.path, wanted: r.to });
+        return false;
+      }
+      return true;
+    });
+    this.indexClashes.set(held);
+    return clear;
+  }
+
   protected fromDating(): void {
     this.step.set(this.afterDatesStep());
   }
@@ -1278,7 +1347,7 @@ export class ImportDialog {
     if (step === 'dates') this.step.set(this.groups().length && !this.removed() ? 'duplicates' : 'overview');
     else if (step === 'repair') this.step.set('dates');
     else if (step === 'index') this.step.set(this.dated() ? 'overview' : this.undated().length ? datesEnd : 'overview');
-    else this.step.set(this.works().length ? 'index' : this.dated() ? 'overview' : this.undated().length ? datesEnd : 'overview');
+    else this.step.set(this.toLookUp().length ? 'index' : this.dated() ? 'overview' : this.undated().length ? datesEnd : 'overview');
   }
 
   /** no going back to the dates once files are renamed: they would be offered for dating again */
@@ -1289,10 +1358,10 @@ export class ImportDialog {
    * for one to do - is handed to the run window. Otherwise the window simply closes.
    */
   protected async finish(): Promise<void> {
-    if (this.lookup() === 'never' && this.works().length) {
+    if (this.lookup() === 'never' && this.toLookUp().length) {
       try {
-        if (this.sandbox()) this.note(`index list: ${this.works().map((w) => w.id).join(', ')}`);
-        else await this.imports.excludeFromIndex(this.works());
+        if (this.sandbox()) this.note(`index list: ${this.toLookUp().map((w) => w.id).join(', ')}`);
+        else await this.imports.excludeFromIndex(this.toLookUp());
       } catch {
         // not written: they are offered again next time, which loses nothing
       }
@@ -1316,15 +1385,15 @@ export class ImportDialog {
         lookups: this.lookups().filter((id) => taken.has(id)).length,
         scope: updates ? this.scopeChosen() : 'skip',
         files: this.filesOf(taken),
-        repair: this.toRepair().map((f) => f.name),
-        repairFicHub: this.toRepair().length > 0 && this.repairFallback() === 'replace',
-        repairFicHubUndated: this.toRepair().length > 0 && this.repairFallback() === 'replace' &&
+        repair: this.runRepairs().map((f) => f.name),
+        repairFicHub: this.runRepairs().length > 0 && this.repairFallback() === 'replace',
+        repairFicHubUndated: this.runRepairs().length > 0 && this.repairFallback() === 'replace' &&
           this.replaceCheck() && this.repairFicHubUndated(),
-        repairFicHubRename: this.toRepair().length > 0 && this.repairFallback() === 'rename',
+        repairFicHubRename: this.runRepairs().length > 0 && this.repairFallback() === 'rename',
         // the guessed-date rule for whichever FicHub choice was made
         repairFicHubCheck: this.repairFallback() === 'rename' ? this.renameCheck()
           : this.repairFallback() === 'replace' ? this.replaceCheck() : true,
-        repairRenameOnly: this.toRepair().length > 0 && this.repairAo3() === 'rename',
+        repairRenameOnly: this.runRepairs().length > 0 && this.repairAo3() === 'rename',
       },
       dated: this.dated(),
     });
